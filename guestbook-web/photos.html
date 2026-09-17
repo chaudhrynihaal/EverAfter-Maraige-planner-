@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Share Your Photos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=DM+Sans:wght@400;500;600&family=Great+Vibes&display=swap" rel="stylesheet" />
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #F6F1EA;
+    color: #2A211C;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 28px; max-width: 480px; margin: 0 auto; width: 100%; }
+  h1 { font-family: 'Great Vibes', cursive; font-weight: 400; font-size: 40px; margin: 0 0 6px; text-align: center; line-height: 1; }
+  p.sub { color: #5C524B; text-align: center; margin: 0 0 20px; font-size: 13px; line-height: 1.5; }
+  label {
+    display: block; font: 600 11px/1 'DM Sans', sans-serif; letter-spacing: 0.12em; text-transform: uppercase;
+    color: #857870; margin-bottom: 8px;
+  }
+  input[type="text"] {
+    width: 100%; padding: 14px 16px; height: 50px; border-radius: 16px; border: none;
+    background: #FFFFFF; box-shadow: 0 6px 18px rgba(42,33,28,0.06); color: #2A211C; font-size: 15px;
+    font-family: 'DM Sans', sans-serif; margin-bottom: 18px;
+  }
+  input[type="text"]::placeholder { color: #A39790; }
+  button {
+    width: 100%; padding: 0; height: 56px; border-radius: 999px; border: none;
+    font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500; margin-top: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .btn-primary { background: #2A211C; color: #F6F1EA; box-shadow: 0 14px 30px rgba(42,33,28,0.22); }
+  .btn-primary:disabled { background: #D7CFC7; color: #fff; opacity: 1; box-shadow: none; }
+  .count {
+    text-align: center; font-size: 12px; color: #857870; margin-bottom: 12px;
+  }
+  .bar-track { width: 100%; height: 6px; border-radius: 3px; background: #E3DCD3; overflow: hidden; margin-bottom: 20px; }
+  .bar-fill { height: 100%; background: #7F8F76; border-radius: 3px; transition: width 0.2s; }
+  .grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 20px;
+  }
+  .thumb { position: relative; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: #E3DCD3; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.uploading::after {
+    content: ''; position: absolute; inset: 0; background: rgba(42,33,28,0.45);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb .spinner {
+    position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+    margin: -10px 0 0 -10px; border: 2.5px solid #fff; border-top-color: #2A211C;
+    border-radius: 50%; animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: #B9695E; text-align: center; margin-top: 12px; font-size: 14px; }
+  .center { text-align: center; padding: 20px; }
+  .center .emoji { font-size: 48px; margin-bottom: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="screen-name">
+    <h1>Share your photos</h1>
+    <p class="sub">Snap up to 10 photos for the happy couple — no app needed.</p>
+    <label for="guestName">Your name</label>
+    <input type="text" id="guestName" placeholder="e.g. Sofia" maxlength="60" />
+    <button class="btn-primary" id="btnStart">Continue</button>
+  </div>
+
+  <div id="screen-camera" class="hidden">
+    <div class="count" id="countLabel">0 of 10 photos shared</div>
+    <div class="bar-track"><div class="bar-fill" id="barFill" style="width:0%"></div></div>
+
+    <div class="grid" id="grid"></div>
+
+    <button class="btn-primary" id="btnTake">Take a Photo</button>
+    <div class="error hidden" id="uploadError"></div>
+
+    <div id="doneMessage" class="center hidden">
+      <div class="emoji">🎉</div>
+      <h1>All done!</h1>
+      <p class="sub">You've shared all 10 photos — thank you!</p>
+    </div>
+  </div>
+
+  <input type="file" accept="image/*" capture="environment" id="fileInput" style="display:none" />
+</div>
+
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+  const SUPABASE_URL = 'https://zqkkfnhwuudqioccyvwn.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpxa2tmbmh3dXVkcWlvY2N5dnduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzMDgzOTYsImV4cCI6MjEwMDg4NDM5Nn0.5a-v9k1I9GYU9HyjDjvh66YCG7OX-IxOh79zV1e3UC8';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Identifies which couple this page's QR code belongs to — without it,
+  // every couple's guests would upload into the same shared table and every
+  // couple's app would read every other couple's submissions back.
+  const weddingId = new URLSearchParams(window.location.search).get('w') || null;
+
+  const MAX_PHOTOS = 10;
+  // Soft per-browser cap only — there's no login, so this resets if a guest
+  // clears their browser data or uses a different device. That's an
+  // accepted tradeoff for a no-install, no-account guest flow.
+  const STORAGE_KEY = 'everafter_photobooth_session';
+
+  function loadSession() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return { guestName: '', photos: [] };
+      const parsed = JSON.parse(raw);
+      return { guestName: parsed.guestName || '', photos: Array.isArray(parsed.photos) ? parsed.photos : [] };
+    } catch {
+      return { guestName: '', photos: [] };
+    }
+  }
+  function saveSession(session) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  }
+
+  let session = loadSession();
+
+  const screenName = document.getElementById('screen-name');
+  const screenCamera = document.getElementById('screen-camera');
+  const guestNameInput = document.getElementById('guestName');
+  const countLabel = document.getElementById('countLabel');
+  const barFill = document.getElementById('barFill');
+  const btnTake = document.getElementById('btnTake');
+  const uploadError = document.getElementById('uploadError');
+  const grid = document.getElementById('grid');
+  const doneMessage = document.getElementById('doneMessage');
+  const fileInput = document.getElementById('fileInput');
+
+  function renderGrid() {
+    grid.innerHTML = '';
+    session.photos.forEach((p) => {
+      const div = document.createElement('div');
+      div.className = 'thumb';
+      const img = document.createElement('img');
+      img.src = p.url;
+      div.appendChild(img);
+      grid.appendChild(div);
+    });
+  }
+
+  function renderProgress() {
+    const count = session.photos.length;
+    countLabel.textContent = `${count} of ${MAX_PHOTOS} photos shared`;
+    barFill.style.width = `${(count / MAX_PHOTOS) * 100}%`;
+    const atLimit = count >= MAX_PHOTOS;
+    btnTake.classList.toggle('hidden', atLimit);
+    doneMessage.classList.toggle('hidden', !atLimit);
+  }
+
+  function showCameraScreen() {
+    screenName.classList.add('hidden');
+    screenCamera.classList.remove('hidden');
+    renderGrid();
+    renderProgress();
+  }
+
+  if (session.guestName && session.photos.length > 0) {
+    guestNameInput.value = session.guestName;
+    showCameraScreen();
+  }
+
+  document.getElementById('btnStart').addEventListener('click', () => {
+    session.guestName = guestNameInput.value.trim() || 'A guest';
+    saveSession(session);
+    showCameraScreen();
+  });
+
+  btnTake.addEventListener('click', () => {
+    if (session.photos.length >= MAX_PHOTOS) return;
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files && fileInput.files[0];
+    fileInput.value = '';
+    if (!file || session.photos.length >= MAX_PHOTOS) return;
+
+    uploadError.classList.add('hidden');
+    btnTake.disabled = true;
+    btnTake.textContent = 'Uploading…';
+
+    // Optimistic placeholder thumbnail while the upload is in flight.
+    const localPreviewUrl = URL.createObjectURL(file);
+    const placeholder = document.createElement('div');
+    placeholder.className = 'thumb uploading';
+    const img = document.createElement('img');
+    img.src = localPreviewUrl;
+    placeholder.appendChild(img);
+    const spinner = document.createElement('div');
+    spinner.className = 'spinner';
+    placeholder.appendChild(spinner);
+    grid.appendChild(placeholder);
+
+    try {
+      const ext = (file.type && file.type.includes('/')) ? file.type.split('/')[1] : 'jpg';
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('guest-photos')
+        .upload(path, file, { contentType: file.type || 'image/jpeg' });
+      if (uploadErr) throw uploadErr;
+
+      const { error: insertErr } = await supabase.from('photo_submissions').insert({
+        guest_name: session.guestName,
+        photo_path: path,
+        wedding_id: weddingId,
+      });
+      if (insertErr) throw insertErr;
+
+      const { data } = supabase.storage.from('guest-photos').getPublicUrl(path);
+      session.photos.push({ path, url: data.publicUrl });
+      saveSession(session);
+      renderGrid();
+      renderProgress();
+    } catch (err) {
+      placeholder.remove();
+      console.error('Photo upload failed', err);
+      const detail = (err && (err.message || err.error_description || err.statusText)) || '';
+      uploadError.textContent = detail
+        ? `Could not upload: ${detail}`
+        : 'Could not upload that photo — check your connection and try again.';
+      uploadError.classList.remove('hidden');
+    } finally {
+      btnTake.disabled = false;
+      btnTake.textContent = 'Take a Photo';
+      URL.revokeObjectURL(localPreviewUrl);
+    }
+  });
+</script>
+</body>
+</html>
