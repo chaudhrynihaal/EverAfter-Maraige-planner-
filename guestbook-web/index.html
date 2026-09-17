@@ -60,6 +60,14 @@
     padding: 0 14px; font-size: 12px; font-weight: 500; margin: 0;
     display: flex; align-items: center; gap: 6px;
   }
+  /* Switches which physical camera (front/back) is recording — distinct
+     from "Flip view", which only mirrors how the current camera previews. */
+  .switch-cam-btn {
+    position: absolute; top: 12px; right: 12px; width: 38px; height: 38px;
+    background: rgba(0,0,0,0.45); color: #fff; border-radius: 50%;
+    padding: 0; margin: 0; font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+  }
   /* Custom play/pause for the review video instead of the browser's native
      controls attribute — with the mirror transform applied straight to the
      <video>, native controls would mirror right along with it (play
@@ -95,6 +103,7 @@
       <video id="preview" autoplay muted playsinline></video>
       <div class="timer hidden" id="timer">1:00</div>
       <div class="record-dot hidden" id="recordDot"></div>
+      <button type="button" class="switch-cam-btn" id="btnSwitchCamera" aria-label="Switch camera">🔄</button>
       <button type="button" class="flip-btn" id="btnFlip">⇋ Flip view</button>
     </div>
     <button class="btn-record" id="btnRecord">Start Recording</button>
@@ -158,6 +167,7 @@
   const camError = document.getElementById('camError');
   const submitError = document.getElementById('submitError');
   const btnFlip = document.getElementById('btnFlip');
+  const btnSwitchCamera = document.getElementById('btnSwitchCamera');
   const btnPlayPause = document.getElementById('btnPlayPause');
 
   btnPlayPause.addEventListener('click', () => {
@@ -185,6 +195,10 @@
   // sync), and the same choice is saved alongside the video so the
   // EverAfter app can play it back mirrored the same way.
   let mirrored = true;
+  // 'user' = front/selfie camera, 'environment' = back camera. Distinct
+  // from `mirrored` above — this actually swaps which physical camera is
+  // recording, not just how the preview is displayed.
+  let facingMode = 'user';
 
   function applyMirrorClass() {
     preview.classList.toggle('mirrored', mirrored);
@@ -197,18 +211,37 @@
     applyMirrorClass();
   });
 
+  // Throws on failure — callers decide how to handle it (initial open shows
+  // an error message; switching cameras falls back to the previous camera).
+  async function acquireCameraStream() {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode },
+      audio: true,
+    });
+    preview.srcObject = stream;
+  }
+
   async function openCamera() {
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
-        audio: true,
-      });
-      preview.srcObject = stream;
+      await acquireCameraStream();
     } catch (err) {
       camError.textContent = 'Could not access camera/microphone. Please allow access and reload the page.';
       camError.classList.remove('hidden');
     }
   }
+
+  btnSwitchCamera.addEventListener('click', async () => {
+    if (recording) return; // switching mid-recording would restart the capture session
+    const previousFacingMode = facingMode;
+    facingMode = facingMode === 'user' ? 'environment' : 'user';
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    try {
+      await acquireCameraStream();
+    } catch (err) {
+      facingMode = previousFacingMode; // most likely this device only has one camera
+      await openCamera();
+    }
+  });
 
   document.getElementById('btnToCamera').addEventListener('click', () => {
     showScreen('record');
@@ -251,6 +284,7 @@
     document.getElementById('btnRecord').textContent = 'Stop Recording';
     recordDot.classList.remove('hidden');
     timerEl.classList.remove('hidden');
+    btnSwitchCamera.classList.add('hidden');
     let elapsed = 0;
     const mm = Math.floor(MAX_SECONDS / 60);
     const ss = MAX_SECONDS % 60;
@@ -268,6 +302,7 @@
   document.getElementById('btnRetake').addEventListener('click', () => {
     submitError.classList.add('hidden');
     document.getElementById('btnRecord').textContent = 'Start Recording';
+    btnSwitchCamera.classList.remove('hidden');
     showScreen('record');
     openCamera();
   });
