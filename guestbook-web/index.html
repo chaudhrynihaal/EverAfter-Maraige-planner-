@@ -60,6 +60,19 @@
     padding: 0 14px; font-size: 12px; font-weight: 500; margin: 0;
     display: flex; align-items: center; gap: 6px;
   }
+  /* Custom play/pause for the review video instead of the browser's native
+     controls attribute — with the mirror transform applied straight to the
+     <video>, native controls would mirror right along with it (play
+     triangle pointing the wrong way, scrubber reversed). */
+  .play-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0; width: auto; height: auto;
+    margin: 0; padding: 0; background: transparent; border-radius: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .play-overlay .dot {
+    width: 56px; height: 56px; border-radius: 50%; background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+  }
   .center { text-align: center; padding: 20px; }
   .center .emoji { font-size: 48px; margin-bottom: 12px; }
   .error { color: #B9695E; text-align: center; margin-top: 12px; font-size: 14px; }
@@ -91,7 +104,12 @@
   <div id="screen-review" class="hidden">
     <h1 class="small">Review your message</h1>
     <div class="video-wrap">
-      <video id="reviewVideo" controls playsinline></video>
+      <video id="reviewVideo" playsinline></video>
+      <button type="button" class="play-overlay" id="btnPlayPause" aria-label="Play or pause">
+        <span class="dot">
+          <svg id="playIcon" width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+      </button>
     </div>
     <button class="btn-primary" id="btnSubmit">Submit Message</button>
     <button class="btn-secondary" id="btnRetake">Retake</button>
@@ -140,6 +158,15 @@
   const camError = document.getElementById('camError');
   const submitError = document.getElementById('submitError');
   const btnFlip = document.getElementById('btnFlip');
+  const btnPlayPause = document.getElementById('btnPlayPause');
+
+  btnPlayPause.addEventListener('click', () => {
+    if (reviewVideo.paused || reviewVideo.ended) reviewVideo.play();
+    else reviewVideo.pause();
+  });
+  reviewVideo.addEventListener('play', () => btnPlayPause.classList.add('hidden'));
+  reviewVideo.addEventListener('pause', () => btnPlayPause.classList.remove('hidden'));
+  reviewVideo.addEventListener('ended', () => btnPlayPause.classList.remove('hidden'));
 
   let stream = null;
   let mediaRecorder = null;
@@ -214,6 +241,7 @@
       recordedSeconds = Math.round((Date.now() - startedAt) / 1000);
       recordedBlob = new Blob(chunks, { type: mimeType || 'video/mp4' });
       reviewVideo.src = URL.createObjectURL(recordedBlob);
+      btnPlayPause.classList.remove('hidden'); // fresh source always starts paused
       stream.getTracks().forEach((t) => t.stop());
       showScreen('review');
     };
