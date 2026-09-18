@@ -95,6 +95,9 @@
     <label for="guestName">Your name</label>
     <input type="text" id="guestName" placeholder="e.g. Grandma June" maxlength="60" />
     <button class="btn-primary" id="btnToCamera">Continue</button>
+    <!-- Carries the same ?w= wedding scope across to the moment page, so a
+         guest who followed one QR doesn't lose which wedding they're at. -->
+    <button type="button" class="btn-secondary" id="btnShareMoment">Or share a photo instead</button>
   </div>
 
   <div id="screen-record" class="hidden">
@@ -246,6 +249,10 @@
   document.getElementById('btnToCamera').addEventListener('click', () => {
     showScreen('record');
     openCamera();
+  });
+
+  document.getElementById('btnShareMoment').addEventListener('click', () => {
+    window.location.href = weddingId ? `moment.html?w=${encodeURIComponent(weddingId)}` : 'moment.html';
   });
 
   function pickMimeType() {
